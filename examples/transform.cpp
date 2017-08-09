@@ -15,7 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <cpd/affine.hpp>
+// #include <cpd/affine.hpp>
 #include <cpd/rigid.hpp>
 #include <fstream>
 #include <iostream>
@@ -29,18 +29,18 @@ int main(int argc, char** argv) {
     cpd::Matrix moving = cpd::matrix_from_path(argv[3]);
     if (std::strcmp(argv[1], "rigid") == 0) {
         cpd::Rigid rigid;
-        rigid.scale(true);
+        // rigid.scale(true);
         cpd::RigidResult result = rigid.run(fixed, moving);
         cpd::Matrix transform = result.matrix();
         std::cout << transform << std::endl;
-    } else if (std::strcmp(argv[1], "affine") == 0) {
-        cpd::AffineResult result = cpd::affine(fixed, moving);
-        cpd::Matrix transform = result.matrix();
-        std::cout << transform << std::endl;
+    // } else if (std::strcmp(argv[1], "affine") == 0) {
+    //     cpd::AffineResult result = cpd::affine(fixed, moving);
+    //     cpd::Matrix transform = result.matrix();
+    //     std::cout << transform << std::endl;
     } else if (std::strcmp(argv[1], "apply") == 0) {
         cpd::Matrix transform = cpd::matrix_from_path(argv[2]);
         cpd::Matrix points = cpd::matrix_from_path(argv[3]);
-        points = cpd::apply_transformation_matrix(points, transform);
+        points = cpd::applyMatrixTransformation(points, transform);
         std::ofstream outfile(argv[4]);
         outfile << points << std::endl;
         outfile.close();

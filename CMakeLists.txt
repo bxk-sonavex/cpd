@@ -47,11 +47,11 @@ configure_file(src/version.cpp.in "${PROJECT_BINARY_DIR}/src/version.cpp")
 
 # C++ library
 set(library-src
-    src/affine.cpp
+    # src/affine.cpp
     src/gauss_transform.cpp
     src/matrix.cpp
-    src/nonrigid.cpp
-    src/normalization.cpp
+    # src/nonrigid.cpp
+    # src/normalization.cpp
     src/rigid.cpp
     src/transform.cpp
     src/utils.cpp
@@ -60,7 +60,7 @@ set(library-src
 if(WITH_FGT)
     list(APPEND library-src src/gauss_transform_fgt.cpp)
 else()
-    list(APPEND library-src src/gauss_transform_make_default.cpp)
+    # list(APPEND library-src src/gauss_transform_make_default.cpp)
 endif()
 
 add_library(Library-C++ ${library-src})

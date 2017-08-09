@@ -19,7 +19,7 @@
 
 namespace cpd {
 
-Matrix apply_transformation_matrix(Matrix points, const Matrix& transform) {
+Matrix applyMatrixTransformation(Matrix points, const Matrix& transform) {
     Matrix::Index rows = points.rows();
     Matrix::Index cols = points.cols() + 1;
     points.conservativeResize(rows, cols);
@@ -27,4 +27,5 @@ Matrix apply_transformation_matrix(Matrix points, const Matrix& transform) {
     Matrix transformed_points = points * transform.transpose();
     return transformed_points.leftCols(cols - 1);
 }
+
 } // namespace cpd

@@ -64,7 +64,7 @@ TEST_F(FishTest, AffineMatrix) {
     Matrix transform = result.matrix();
     ASSERT_EQ(transform.rows(), 3);
     ASSERT_EQ(transform.cols(), 3);
-    Matrix fish = apply_transformation_matrix(m_fish, transform);
+    Matrix fish = applyMatrixTransformation(m_fish, transform);
     EXPECT_TRUE(result.points.isApprox(fish, 1e-4));
 }
 } // namespace cpd

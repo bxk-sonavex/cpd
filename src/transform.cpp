@@ -19,8 +19,9 @@
 
 namespace cpd {
 
-void Result::denormalize(const Normalization& normalization) {
-    points = points * normalization.fixed_scale +
-             normalization.fixed_mean.transpose().replicate(points.rows(), 1);
-}
+//void Result::denormalize(const Normalization& normalization) {
+//	points = points * normalization.fixed_scale
+//			+ normalization.fixed_mean.transpose().replicate(points.rows(), 1);
+//}
+
 } // namespace cpd

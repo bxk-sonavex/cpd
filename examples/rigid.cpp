@@ -15,7 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include <cpd/jsoncpp.hpp>
+// #include <cpd/jsoncpp.hpp>
 #include <cpd/rigid.hpp>
 #include <fstream>
 #include <iostream>
@@ -29,9 +29,9 @@ int main(int argc, char** argv) {
     cpd::Matrix fixed = cpd::matrix_from_path(argv[1]);
     cpd::Matrix moving = cpd::matrix_from_path(argv[2]);
     cpd::Rigid rigid;
-    rigid.scale(true);
+    // rigid.scale(true);
     cpd::RigidResult result = rigid.run(fixed, moving);
-    std::cout << cpd::to_json(result) << std::endl;
+    // std::cout << cpd::to_json(result) << std::endl;
     if (argc == 4) {
         std::ofstream outfile(argv[3]);
         outfile << result.points << std::endl;

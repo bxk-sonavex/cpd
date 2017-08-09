@@ -21,42 +21,41 @@
 #include <cmath>
 
 namespace cpd {
-Probabilities GaussTransformDirect::compute(const Matrix& fixed,
-                                            const Matrix& moving, double sigma2,
-                                            double outliers) const {
-    double ksig = -2.0 * sigma2;
-    size_t cols = fixed.cols();
-    double outlier_tmp =
-        (outliers * moving.rows() * std::pow(-ksig * M_PI, 0.5 * cols)) /
-        ((1 - outliers) * fixed.rows());
-    Vector p = Vector::Zero(moving.rows());
-    Vector p1 = Vector::Zero(moving.rows());
-    Vector p1_max = Vector::Zero(moving.rows());
-    Vector pt1 = Vector::Zero(fixed.rows());
-    Matrix px = Matrix::Zero(moving.rows(), cols);
-    IndexVector correspondence = IndexVector::Zero(moving.rows());
-    double l = 0.0;
 
-    for (Matrix::Index i = 0; i < fixed.rows(); ++i) {
-        double sp = 0;
-        for (Matrix::Index j = 0; j < moving.rows(); ++j) {
-            double razn = (fixed.row(i) - moving.row(j)).array().pow(2).sum();
-            p(j) = std::exp(razn / ksig);
-            sp += p(j);
-        }
-        sp += outlier_tmp;
-        pt1(i) = 1 - outlier_tmp / sp;
-        for (Matrix::Index j = 0; j < moving.rows(); ++j) {
-            p1(j) += p(j) / sp;
-            px.row(j) += fixed.row(i) * p(j) / sp;
-            if (p(j) / sp > p1_max(j)) {
-                correspondence(j) = i;
-                p1_max(j) = p(j) / sp;
-            }
-        }
-        l += -std::log(sp);
-    }
-    l += cols * fixed.rows() * std::log(sigma2) / 2;
-    return { p1, pt1, px, l, correspondence };
+Probabilities GaussTransformDirect::compute(const Matrix& fixed,
+		const Matrix& moving, double sigma2, double outliers) const {
+	double ksig = -2.0 * sigma2;
+	size_t cols = fixed.cols();
+	double outlier_tmp = (outliers * moving.rows()
+			* std::pow(-ksig * M_PI, 0.5 * cols))
+			/ ((1 - outliers) * fixed.rows());
+	Vector p = Vector::Zero(moving.rows());
+	Vector p1 = Vector::Zero(moving.rows());
+	Vector pt1 = Vector::Zero(fixed.rows());
+	Matrix px = Matrix::Zero(moving.rows(), cols);
+	double l = 0.0;
+
+	for (Matrix::Index i = 0; i < fixed.rows(); ++i) {
+		double sp = 0;
+		for (Matrix::Index j = 0; j < moving.rows(); ++j) {
+			double razn = (fixed.row(i) - moving.row(j)).array().pow(2).sum();
+			p(j) = std::exp(razn / ksig);
+			sp += p(j);
+		}
+		sp += outlier_tmp;
+		pt1(i) = 1 - outlier_tmp / sp;
+		for (Matrix::Index j = 0; j < moving.rows(); ++j) {
+			p1(j) += p(j) / sp;
+			px.row(j) += fixed.row(i) * p(j) / sp;
+		}
+		l += -std::log(sp);
+	}
+	l += cols * fixed.rows() * std::log(sigma2) / 2;
+	return {p1, pt1, px, l};
 }
+
+std::unique_ptr<GaussTransform> GaussTransform::makeDefault() {
+	return std::unique_ptr < GaussTransform > (new GaussTransformDirect());
+}
+
 } // namespace cpd

@@ -32,7 +32,7 @@ typedef Eigen::MatrixXd Matrix;
 typedef Eigen::VectorXd Vector;
 
 /// Typedef for an index vector, used to index other matrices.
-typedef Eigen::Matrix<Matrix::Index, Eigen::Dynamic, 1> IndexVector;
+//typedef Eigen::Matrix<Matrix::Index, Eigen::Dynamic, 1> IndexVector;
 
 /// Typedef for our specific type of array.
 typedef Eigen::ArrayXd Array;
@@ -40,5 +40,6 @@ typedef Eigen::ArrayXd Array;
 /// Apply a transformation matrix to a set of points.
 ///
 /// The transformation matrix should be one column wider than the point matrix.
-Matrix apply_transformation_matrix(Matrix points, const Matrix& transform);
+Matrix applyMatrixTransformation(Matrix points, const Matrix& transform);
+
 } // namespace cpd

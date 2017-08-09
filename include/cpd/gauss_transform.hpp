@@ -39,14 +39,16 @@ struct Probabilities {
     /// The total error.
     double l;
     /// The correspondence vector between the two datasets.
-    IndexVector correspondence;
+//    IndexVector correspondence;
 };
 
 /// Abstract base class for Gauss transforms.
 class GaussTransform {
 public:
+	virtual ~GaussTransform() {};
+
     /// Returns the default Gauss transform as a unique ptr.
-    static std::unique_ptr<GaussTransform> make_default();
+    static std::unique_ptr<GaussTransform> makeDefault();
 
     /// Computes the Gauss transform.
     virtual Probabilities compute(const Matrix& fixed, const Matrix& moving,
@@ -59,4 +61,5 @@ public:
     Probabilities compute(const Matrix& fixed, const Matrix& moving,
                           double sigma2, double outliers) const;
 };
+
 } // namespace cpd

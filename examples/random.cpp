@@ -23,7 +23,7 @@
 #include <iostream>
 #include <string>
 
-#include <cpd/nonrigid.hpp>
+// #include <cpd/nonrigid.hpp>
 #include <cpd/rigid.hpp>
 
 int main(int argc, char** argv) {
@@ -40,10 +40,10 @@ int main(int argc, char** argv) {
 
     if (method == "rigid") {
         cpd::rigid(fixed, moving);
-    } else if (method == "nonrigid") {
-        cpd::nonrigid(fixed, moving);
+    // } else if (method == "nonrigid") {
+    //     cpd::nonrigid(fixed, moving);
     } else {
-        std::cout << "Invalid method: " << method << std::endl;
+        std::cout << "Method not supported: " << method << std::endl;
         return 1;
     }
     std::cout << "Registration completed OK" << std::endl;
