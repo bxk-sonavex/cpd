@@ -27,8 +27,6 @@ namespace cpd {
 
 /// Should rigid registrations allow reflections by default?
 const bool DEFAULT_REFLECTIONS = false;
-/// Should rigid registrations scale the data by default?
-//const bool DEFAULT_SCALE = !DEFAULT_LINKED;
 
 /// The result of a rigid coherent point drift run.
 struct RigidResult: public Result {
@@ -38,12 +36,9 @@ struct RigidResult: public Result {
 	Vector translation;
 	/// The scaling component of the transformation.
 	double scale;
-
 	/// Returns a single matrix that contains all the transformation
 	/// information.
 	Matrix matrix() const;
-
-//	void denormalize(const Normalization& normalization);
 };
 
 /// Rigid coherent point drift.
@@ -51,22 +46,15 @@ struct RigidResult: public Result {
 /// Scaling and reflections can be turned on and off.
 class Rigid: public Transform<RigidResult> {
 public:
-	Rigid() : Transform(), m_reflections(DEFAULT_REFLECTIONS) {
-	}
+	Rigid();
 
 	/// Sets whether this rigid transform allows reflections.
-	Rigid& reflections(bool reflections) {
-		m_reflections = reflections;
-		return *this;
-	}
+	Rigid& reflections(bool reflections);
 
 	/// Computes one iteration of the rigid transformation.
-	RigidResult compute_one(const Matrix& fixed, const Matrix& moving,
-			const Probabilities& probabilities, double sigma2) const;
-
-//	virtual bool linked() const {
-//		return !m_scale;
-//	}
+	RigidResult computeMStep(const Matrix& fixed, const Matrix& moving,
+													 const Probabilities& probabilities,
+													 double sigma2) const;
 
 private:
 	bool m_reflections;
@@ -75,4 +63,4 @@ private:
 /// Runs a rigid registration on two matrices.
 RigidResult rigid(const Matrix& fixed, const Matrix& moving);
 
-} // namespace cpd
+}  // namespace cpd

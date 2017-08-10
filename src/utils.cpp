@@ -46,7 +46,7 @@ Matrix matrix_from_path(const std::string& path) {
 		if (!rows.empty() && rows.back().size() != row.size()) {
 			std::stringstream msg;
 			msg << "Irregular number of rows: " << rows.back().size() << ", "
-				<< row.size();
+					<< row.size();
 			throw std::runtime_error(msg.str());
 		}
 		rows.push_back(row);
@@ -67,8 +67,8 @@ Matrix matrix_from_path(const std::string& path) {
 
 double default_sigma2(const Matrix& fixed, const Matrix& moving) {
 	return ((moving.rows() * (fixed.transpose() * fixed).trace())
-			+ (fixed.rows() * (moving.transpose() * moving).trace())
-			- 2 * fixed.colwise().sum() * moving.colwise().sum().transpose())
-			/ (fixed.rows() * moving.rows() * fixed.cols());
+					+ (fixed.rows() * (moving.transpose() * moving).trace())
+					- 2 * fixed.colwise().sum() * moving.colwise().sum().transpose())
+					/ (fixed.rows() * moving.rows() * fixed.cols());
 }
-} // namespace cpd
+}  // namespace cpd

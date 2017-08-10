@@ -20,12 +20,12 @@
 namespace cpd {
 
 Matrix applyMatrixTransformation(Matrix points, const Matrix& transform) {
-    Matrix::Index rows = points.rows();
-    Matrix::Index cols = points.cols() + 1;
-    points.conservativeResize(rows, cols);
-    points.col(cols - 1) = Vector::Ones(rows);
-    Matrix transformed_points = points * transform.transpose();
-    return transformed_points.leftCols(cols - 1);
+	Matrix::Index rows = points.rows();
+	Matrix::Index cols = points.cols() + 1;
+	points.conservativeResize(rows, cols);
+	points.col(cols - 1) = Vector::Ones(rows);
+	Matrix transformed_points = points * transform.transpose();
+	return transformed_points.leftCols(cols - 1);
 }
 
-} // namespace cpd
+}  // namespace cpd

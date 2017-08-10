@@ -42,4 +42,4 @@ typedef Eigen::ArrayXd Array;
 /// The transformation matrix should be one column wider than the point matrix.
 Matrix applyMatrixTransformation(Matrix points, const Matrix& transform);
 
-} // namespace cpd
+}  // namespace cpd

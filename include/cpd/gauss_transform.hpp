@@ -30,36 +30,36 @@ namespace cpd {
 /// Probability matrices produced by comparing two data sets with a
 /// `GaussTransform`.
 struct Probabilities {
-    /// The probability matrix, multiplied by the identity matrix.
-    Vector p1;
-    /// The probability matrix, transposes, multiplied by the identity matrix.
-    Vector pt1;
-    /// The probability matrix multiplied by the fixed points.
-    Matrix px;
-    /// The total error.
-    double l;
-    /// The correspondence vector between the two datasets.
-//    IndexVector correspondence;
+	/// The probability matrix, multiplied by the identity matrix.
+	Vector p1;
+	/// The probability matrix, transposes, multiplied by the identity matrix.
+	Vector pt1;
+	/// The probability matrix multiplied by the fixed points.
+	Matrix px;
+	/// The total error.
+	double l;
 };
 
 /// Abstract base class for Gauss transforms.
 class GaussTransform {
 public:
-	virtual ~GaussTransform() {};
+	virtual ~GaussTransform();
 
-    /// Returns the default Gauss transform as a unique ptr.
-    static std::unique_ptr<GaussTransform> makeDefault();
+	/// Returns the default Gauss transform as a unique ptr.
+	static std::unique_ptr<GaussTransform> makeDefault();
 
-    /// Computes the Gauss transform.
-    virtual Probabilities compute(const Matrix& fixed, const Matrix& moving,
-                                  double sigma2, double outliers) const = 0;
+	/// Computes the Gauss transform.
+	virtual Probabilities computeEStep(const Matrix& fixed, const Matrix& moving,
+																			double sigma2,
+																			double outliers) const = 0;
 };
 
 /// The direct Gauss transform.
-class GaussTransformDirect : public GaussTransform {
+class GaussTransformDirect: public GaussTransform {
 public:
-    Probabilities compute(const Matrix& fixed, const Matrix& moving,
-                          double sigma2, double outliers) const;
+	Probabilities computeEStep(const Matrix& fixed, const Matrix& moving,
+															double sigma2,
+															double outliers) const;
 };
 
-} // namespace cpd
+}  // namespace cpd
