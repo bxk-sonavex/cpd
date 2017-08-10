@@ -21,21 +21,47 @@
 #include <iostream>
 
 int main(int argc, char** argv) {
-    if (!(argc == 3 || argc == 4)) {
-        std::cout << "ERROR: invalid usage" << std::endl;
-        std::cout << "USAGE: cpd-rigid <fixed> <moving> [outfile]" << std::endl;
-        return 1;
-    }
-    cpd::Matrix fixed = cpd::matrix_from_path(argv[1]);
-    cpd::Matrix moving = cpd::matrix_from_path(argv[2]);
-    cpd::Rigid rigid;
-    // rigid.scale(true);
-    cpd::RigidResult result = rigid.run(fixed, moving);
-    // std::cout << cpd::to_json(result) << std::endl;
-    if (argc == 4) {
-        std::ofstream outfile(argv[3]);
-        outfile << result.points << std::endl;
-        outfile.close();
-    }
-    return 0;
+	double execTime;
+	clock_t clockStart;
+
+	if (!(argc == 4 || argc == 5)) {
+		std::cout << "ERROR: invalid usage" << std::endl;
+		std::cout << "USAGE: cpd-rigid <sigma> <fixed> <moving> [outfile]"
+							<< std::endl;
+		return 1;
+	}
+
+	clockStart = clock();
+	float sigma = std::atof(argv[1]);
+	cpd::Matrix fixed = cpd::matrix_from_path(argv[2]);
+	cpd::Matrix moving = cpd::matrix_from_path(argv[3]);
+
+	std::cout << argv[2] << ": " << fixed.rows() << std::endl;
+	std::cout << argv[3] << ": " << moving.rows() << std::endl;
+  std::cout << "sigma = " << sigma << std::endl;
+  
+  execTime = (double) (clock() - clockStart) / CLOCKS_PER_SEC;
+  std::cout << "Loading data took " << execTime << " sec (CPU)" << std::endl;
+
+	clockStart = clock();
+	cpd::Rigid rigid;
+	rigid.sigma2(sigma);
+	cpd::RigidResult result = rigid.run(fixed, moving);
+	// std::cout << cpd::to_json(result) << std::endl;
+	execTime = (double) (clock() - clockStart) / CLOCKS_PER_SEC;
+	std::cout << "Registration took " << execTime << " sec (CPU)" << std::endl;
+
+  cpd::Matrix transform = result.matrix();
+  std::cout << "Transformation Matrix" << std::endl;
+  std::cout << transform << std::endl;
+
+	if (argc == 5) {
+    std::cout << "Save result to ... " << argv[4];
+		std::ofstream outfile(argv[4]);
+		outfile << result.points << std::endl;
+		outfile.close();
+    std::cout << "done" << std::endl;
+	}
+
+	return 0;
 }

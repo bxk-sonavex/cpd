@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <chrono>
 #include <cpd/gauss_transform.hpp>
 #include <cpd/matrix.hpp>
@@ -35,16 +36,12 @@ namespace cpd {
 
 /// The default number of iterations allowed.
 const size_t DEFAULT_MAX_ITERATIONS = 100;
-///// Whether points should be normalized by default.
-//const bool DEFAULT_NORMALIZE = false;
 /// The default outlier weight.
 const double DEFAULT_OUTLIERS = 0.5;
 /// The default tolerance.
 const double DEFAULT_TOLERANCE = 1e-5;
 /// The default sigma2.
 const double DEFAULT_SIGMA2 = 0.0;
-/// Are the scalings of the two datasets linked by default?
-const bool DEFAULT_LINKED = true;
 
 /// The result of a generic transform run.
 struct Result {
@@ -56,12 +53,6 @@ struct Result {
 	std::chrono::microseconds runtime;
 	/// The number of iterations.
 	size_t iterations;
-
-	/// De-normalize this result.
-	///
-	/// Generally, this scales the points back, and sometimes adjust transforms
-	/// or shifts or the like.
-//	virtual void denormalize(const Normalization& normalization);
 };
 
 /// Generic coherent point drift transform.
@@ -70,33 +61,27 @@ struct Result {
 template<typename Result>
 class Transform {
 public:
-	virtual ~Transform() {};
+	virtual ~Transform() {
+	}
+	;
 
-	Transform() :
-			m_gauss_transform(GaussTransform::makeDefault()),
-			m_max_iterations(DEFAULT_MAX_ITERATIONS), /*m_normalize(DEFAULT_NORMALIZE), */
-			m_outliers(DEFAULT_OUTLIERS), m_sigma2(DEFAULT_SIGMA2),
-			m_tolerance(DEFAULT_TOLERANCE) {
+	Transform()
+			: m_GaussTransform(GaussTransform::makeDefault()),
+				m_MaxIterations(DEFAULT_MAX_ITERATIONS), m_outliers(DEFAULT_OUTLIERS),
+				m_sigma2(DEFAULT_SIGMA2), m_tolerance(DEFAULT_TOLERANCE) {
 	}
 
 	/// Sets the gauss transform.
-	Transform& gauss_transform(
-			std::unique_ptr<GaussTransform> gauss_transform) {
-		m_gauss_transform = std::move(gauss_transform);
+	Transform& gauss_transform(std::unique_ptr<GaussTransform> gauss_transform) {
+		m_GaussTransform = std::move(gauss_transform);
 		return *this;
 	}
 
 	/// Sets the max iterations for this transform.
 	Transform& max_iterations(double max_iterations) {
-		m_max_iterations = max_iterations;
+		m_MaxIterations = max_iterations;
 		return *this;
 	}
-
-//	/// Sets whether to normalize the points before running cpd.
-//	Transform& normalize(bool normalize) {
-//		m_normalize = normalize;
-//		return *this;
-//	}
 
 	/// Sets the outlier tolerance.
 	Transform& outliers(double outliers) {
@@ -119,20 +104,13 @@ public:
 	/// Runs this transform for the provided matrices.
 	Result run(Matrix fixed, Matrix moving) {
 		auto tic = std::chrono::high_resolution_clock::now();
-//		Normalization normalization(fixed, moving, linked());
-//		if (m_normalize) {
-//			fixed = normalization.fixed;
-//			moving = normalization.moving;
-//		}
-//
+
 		this->init(fixed, moving);
 
 		Result result;
 		result.points = moving;
 		if (m_sigma2 == 0.0) {
 			result.sigma2 = cpd::default_sigma2(fixed, moving);
-//		} else if (m_normalize) {
-//			result.sigma2 = m_sigma2 / normalization.fixed_scale;
 		} else {
 			result.sigma2 = m_sigma2;
 		}
@@ -140,26 +118,39 @@ public:
 		size_t iter = 0;
 		double ntol = m_tolerance + 10.0;
 		double l = 0.;
-		while (iter < m_max_iterations && ntol > m_tolerance
-				&& result.sigma2 > 10 * std::numeric_limits<double>::epsilon()) {
-			Probabilities probabilities = m_gauss_transform->compute(fixed,
-					result.points, result.sigma2, m_outliers);
-			this->modify_probabilities(probabilities);
+		while (iter < m_MaxIterations && ntol > m_tolerance
+						&& result.sigma2 > 10 * std::numeric_limits<double>::epsilon()) {
 
-			ntol = std::abs((probabilities.l - l) / probabilities.l);
-			l = probabilities.l;
+//			auto ticEM = std::chrono::high_resolution_clock::now();
+			clock_t clockStart = clock();
 
-			result = this->compute_one(fixed, moving, probabilities,
-					result.sigma2);
+			Probabilities P = m_GaussTransform->computeEStep(fixed, result.points,
+																												result.sigma2,
+																												m_outliers);
+			this->modifyProbabilities(P);
+
+			ntol = std::abs((P.l - l) / P.l);
+			l = P.l;
+
+			result = this->computeMStep(fixed, moving, P, result.sigma2);
+
+//			auto tocEM = std::chrono::high_resolution_clock::now();
+//			// fractional duration: no duration_cast needed
+//			std::chrono::duration<double, std::milli> runetime_ms = tocEM - ticEM;
+			double execTime = (double) (clock() - clockStart) / CLOCKS_PER_SEC;
 			++iter;
+
+			std::cout << iter << " of " << m_MaxIterations << ": dL = " << ntol
+								<< ", sigma2 = " << result.sigma2 << ", " << execTime
+								<< " sec (CPU)" << std::endl;
+//								<< ", sigma2 = " << result.sigma2 << ", " << runetime_ms.count()
+//								<< " ms (CPU)" << std::endl;
 		}
 
-//		if (m_normalize) {
-//			result.denormalize(normalization);
-//		}
 		auto toc = std::chrono::high_resolution_clock::now();
+		// integral duration: requires duration_cast
 		result.runtime = std::chrono::duration_cast < std::chrono::microseconds
-				> (toc - tic);
+											> (toc - tic);
 		result.iterations = iter;
 		return result;
 	}
@@ -176,24 +167,19 @@ public:
 	///
 	/// Some types of transform need to tweak the probabilities before moving on
 	/// with an interation. The default behavior is to do nothing.
-	virtual void modify_probabilities(Probabilities& probabilities) const {
+	virtual void modifyProbabilities(Probabilities& probabilities) const {
 	}
 
 	/// Computes one iteration of the transform.
-	virtual Result compute_one(const Matrix& fixed, const Matrix& moving,
-			const Probabilities& probabilities, double sigma2) const = 0;
-
-	/// Returns true if the normalization should be linked.
-	///
-	/// No effect if no normalization is applied.
-//	virtual bool linked() const = 0;
+	virtual Result computeMStep(const Matrix& fixed, const Matrix& moving,
+															const Probabilities& probabilities,
+															double sigma2) const = 0;
 
 private:
-	std::unique_ptr<GaussTransform> m_gauss_transform;
-	size_t m_max_iterations;
-//	bool m_normalize;
+	std::unique_ptr<GaussTransform> m_GaussTransform;
+	size_t m_MaxIterations;
 	double m_outliers;
 	double m_sigma2;
 	double m_tolerance;
 };
-} // namespace cpd
+}  // namespace cpd
