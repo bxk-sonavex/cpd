@@ -22,13 +22,15 @@
 
 namespace cpd {
 
-Probabilities GaussTransformDirect::compute(const Matrix& fixed,
-		const Matrix& moving, double sigma2, double outliers) const {
+Probabilities GaussTransformDirect::computeEStep(const Matrix& fixed,
+																								 const Matrix& moving,
+																								 double sigma2, double outliers) const {
 	double ksig = -2.0 * sigma2;
+	double truncate = log(1e-3);
 	size_t cols = fixed.cols();
 	double outlier_tmp = (outliers * moving.rows()
-			* std::pow(-ksig * M_PI, 0.5 * cols))
-			/ ((1 - outliers) * fixed.rows());
+												* std::pow(-ksig * M_PI, 0.5 * cols))
+												/ ((1 - outliers) * fixed.rows());
 	Vector p = Vector::Zero(moving.rows());
 	Vector p1 = Vector::Zero(moving.rows());
 	Vector pt1 = Vector::Zero(fixed.rows());
@@ -39,9 +41,15 @@ Probabilities GaussTransformDirect::compute(const Matrix& fixed,
 		double sp = 0;
 		for (Matrix::Index j = 0; j < moving.rows(); ++j) {
 			double razn = (fixed.row(i) - moving.row(j)).array().pow(2).sum();
-			p(j) = std::exp(razn / ksig);
-			sp += p(j);
+			razn = razn / ksig;
+			if (razn < truncate) {
+				p(j) = 0;
+			} else {
+				p(j) = std::exp(razn);
+				sp += p(j);
+			}
 		}
+
 		sp += outlier_tmp;
 		pt1(i) = 1 - outlier_tmp / sp;
 		for (Matrix::Index j = 0; j < moving.rows(); ++j) {
@@ -51,11 +59,15 @@ Probabilities GaussTransformDirect::compute(const Matrix& fixed,
 		l += -std::log(sp);
 	}
 	l += cols * fixed.rows() * std::log(sigma2) / 2;
+
 	return {p1, pt1, px, l};
+}
+
+GaussTransform::~GaussTransform() {
 }
 
 std::unique_ptr<GaussTransform> GaussTransform::makeDefault() {
 	return std::unique_ptr < GaussTransform > (new GaussTransformDirect());
 }
 
-} // namespace cpd
+}  // namespace cpd
