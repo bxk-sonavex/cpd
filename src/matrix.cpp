@@ -15,11 +15,60 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+#include <fstream>
+#include <vector>
+
 #include <cpd/matrix.hpp>
 
 namespace cpd {
 
-Matrix applyMatrixTransformation(Matrix points, const Matrix& transform) {
+Matrix loadMatrixFromFile(const std::string& path, const char delimiter) {
+	std::ifstream file(path);
+	if (!file.is_open()) {
+		std::stringstream msg;
+		msg << "Unable to open file for reading: " << path;
+		throw std::runtime_error(msg.str());
+	}
+	std::string line;
+	std::vector<std::vector<double>> rows;
+	while (std::getline(file, line)) {
+		std::vector<double> row;
+		std::stringstream ss(line);
+		double n;
+		while (ss >> n) {
+			row.push_back(n);
+			// TODO support other delimiters than commas
+			if (ss.peek() == delimiter) {
+				ss.ignore();
+			}
+		}
+
+		if (!rows.empty() && rows.back().size() != row.size()) {
+			std::stringstream msg;
+			msg << "Irregular number of rows: " << rows.back().size() << ", "
+					<< row.size();
+			throw std::runtime_error(msg.str());
+		}
+		rows.push_back(row);
+	}
+
+	if (rows.empty()) {
+		return Matrix(0, 0);
+	}
+
+	size_t nrows = rows.size();
+	size_t ncols = rows[0].size();
+	Matrix matrix(nrows, ncols);
+	for (size_t i = 0; i < nrows; ++i) {
+		for (size_t j = 0; j < ncols; ++j) {
+			matrix(i, j) = rows[i][j];
+		}
+	}
+
+	return matrix;
+}
+
+Matrix applyTransformation(Matrix points, const Matrix& transform) {
 	Matrix::Index rows = points.rows();
 	Matrix::Index cols = points.cols() + 1;
 	points.conservativeResize(rows, cols);

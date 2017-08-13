@@ -20,8 +20,8 @@
 
 namespace cpd {
 
-Rigid::Rigid():
-	Transform(), m_reflections(DEFAULT_REFLECTIONS) {
+Rigid::Rigid()
+		: Transform(), m_reflections(DEFAULT_REFLECTIONS) {
 }
 
 /// Sets whether this rigid transform allows reflections.
@@ -38,7 +38,7 @@ RigidResult Rigid::computeMStep(const Matrix& fixed, const Matrix& moving,
 	Vector mu_x = fixed.transpose() * probabilities.pt1 / np;
 	Vector mu_y = moving.transpose() * probabilities.p1 / np;
 	Matrix a = probabilities.px.transpose() * moving
-							- np * mu_x * mu_y.transpose();
+						 - np * mu_x * mu_y.transpose();
 	Eigen::JacobiSVD<Matrix, Eigen::NoQRPreconditioner> svd(
 			a, Eigen::ComputeThinU | Eigen::ComputeThinV);
 	Matrix s = svd.singularValues().asDiagonal();
@@ -53,12 +53,13 @@ RigidResult Rigid::computeMStep(const Matrix& fixed, const Matrix& moving,
 	result.sigma2 =
 			std::abs(
 					((fixed.array().pow(2) * probabilities.pt1.replicate(1, cols).array()).sum()
-						+ (moving.array().pow(2)
-								* probabilities.p1.replicate(1, cols).array()).sum()
-						- np * mu_x.transpose() * mu_x - np * mu_y.transpose() * mu_y
-						- 2 * (s * c).trace()))
+					 + (moving.array().pow(2)
+							* probabilities.p1.replicate(1, cols).array()).sum()
+					 - np * mu_x.transpose() * mu_x - np * mu_y.transpose() * mu_y
+					 - 2 * (s * c).trace()))
 			/ (np * cols);
 	result.translation = mu_x - result.scale * result.rotation * mu_y;
+	// apply the transformation
 	result.points = result.scale * moving * result.rotation.transpose()
 									+ result.translation.transpose().replicate(moving.rows(), 1);
 	return result;

@@ -54,7 +54,7 @@ set(library-src
     # src/normalization.cpp
     src/rigid.cpp
     src/transform.cpp
-    src/utils.cpp
+    # src/utils.cpp
     "${PROJECT_BINARY_DIR}/src/version.cpp"
     )
 if(WITH_FGT)

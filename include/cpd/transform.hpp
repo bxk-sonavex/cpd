@@ -26,11 +26,9 @@
 
 #include <iostream>
 #include <chrono>
+#include <memory>
 #include <cpd/gauss_transform.hpp>
 #include <cpd/matrix.hpp>
-//#include <cpd/normalization.hpp>
-#include <cpd/utils.hpp>
-#include <memory>
 
 namespace cpd {
 
@@ -55,6 +53,9 @@ struct Result {
 	size_t iterations;
 };
 
+/// Computes the default sigma2 for the given matrices.
+double computeSigma2(const Matrix& fixed, const Matrix& moving);
+
 /// Generic coherent point drift transform.
 ///
 /// An abstract base class for real transforms, e.g. `Rigid` or `Nonrigid`.
@@ -63,7 +64,6 @@ class Transform {
 public:
 	virtual ~Transform() {
 	}
-	;
 
 	Transform()
 			: m_GaussTransform(GaussTransform::makeDefault()),
@@ -73,31 +73,31 @@ public:
 
 	/// Sets the gauss transform.
 	Transform& gauss_transform(std::unique_ptr<GaussTransform> gauss_transform) {
-		m_GaussTransform = std::move(gauss_transform);
+		this->m_GaussTransform = std::move(gauss_transform);
 		return *this;
 	}
 
 	/// Sets the max iterations for this transform.
 	Transform& max_iterations(double max_iterations) {
-		m_MaxIterations = max_iterations;
+		this->m_MaxIterations = max_iterations;
 		return *this;
 	}
 
 	/// Sets the outlier tolerance.
 	Transform& outliers(double outliers) {
-		m_outliers = outliers;
+		this->m_outliers = outliers;
 		return *this;
 	}
 
 	/// Sets the sigma2 value for this transform.
 	Transform& sigma2(double sigma2) {
-		m_sigma2 = sigma2;
+		this->m_sigma2 = sigma2;
 		return *this;
 	}
 
 	/// Sets the final tolerance.
 	Transform& tolerance(double tolerance) {
-		m_tolerance = tolerance;
+		this->m_tolerance = tolerance;
 		return *this;
 	}
 
@@ -109,24 +109,24 @@ public:
 
 		Result result;
 		result.points = moving;
-		if (m_sigma2 == 0.0) {
-			result.sigma2 = cpd::default_sigma2(fixed, moving);
+		if (this->m_sigma2 <= 0.0) {
+			result.sigma2 = cpd::computeSigma2(fixed, moving);
 		} else {
-			result.sigma2 = m_sigma2;
+			result.sigma2 = this->m_sigma2;
 		}
 
 		size_t iter = 0;
-		double ntol = m_tolerance + 10.0;
+		double ntol = this->m_tolerance + 10.0;
 		double l = 0.;
-		while (iter < m_MaxIterations && ntol > m_tolerance
-						&& result.sigma2 > 10 * std::numeric_limits<double>::epsilon()) {
+		while (iter < this->m_MaxIterations && ntol > this->m_tolerance
+					 && result.sigma2 > 10 * std::numeric_limits<double>::epsilon()) {
 
 //			auto ticEM = std::chrono::high_resolution_clock::now();
 			clock_t clockStart = clock();
 
-			Probabilities P = m_GaussTransform->computeEStep(fixed, result.points,
-																												result.sigma2,
-																												m_outliers);
+			Probabilities P = this->m_GaussTransform->computeEStep(fixed, result.points,
+																														 result.sigma2,
+																														 this->m_outliers);
 			this->modifyProbabilities(P);
 
 			ntol = std::abs((P.l - l) / P.l);
@@ -140,9 +140,9 @@ public:
 			double execTime = (double) (clock() - clockStart) / CLOCKS_PER_SEC;
 			++iter;
 
-			std::cout << iter << " of " << m_MaxIterations << ": dL = " << ntol
-								<< ", sigma2 = " << result.sigma2 << ", " << execTime
-								<< " sec (CPU)" << std::endl;
+			std::cout << iter << " of " << this->m_MaxIterations << ": dL = " << ntol
+								<< ", sigma2 = " << result.sigma2 << ", " << execTime << " sec (CPU)"
+								<< std::endl;
 //								<< ", sigma2 = " << result.sigma2 << ", " << runetime_ms.count()
 //								<< " ms (CPU)" << std::endl;
 		}
@@ -150,7 +150,7 @@ public:
 		auto toc = std::chrono::high_resolution_clock::now();
 		// integral duration: requires duration_cast
 		result.runtime = std::chrono::duration_cast < std::chrono::microseconds
-											> (toc - tic);
+										 > (toc - tic);
 		result.iterations = iter;
 		return result;
 	}

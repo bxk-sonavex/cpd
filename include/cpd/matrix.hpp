@@ -26,20 +26,20 @@
 namespace cpd {
 
 /// Our base matrix class.
-typedef Eigen::MatrixXd Matrix;
+typedef Eigen::MatrixXf Matrix;
 
 /// Typedef for our specific type of vector.
-typedef Eigen::VectorXd Vector;
-
-/// Typedef for an index vector, used to index other matrices.
-//typedef Eigen::Matrix<Matrix::Index, Eigen::Dynamic, 1> IndexVector;
+typedef Eigen::VectorXf Vector;
 
 /// Typedef for our specific type of array.
-typedef Eigen::ArrayXd Array;
+typedef Eigen::ArrayXf Array;
 
 /// Apply a transformation matrix to a set of points.
 ///
 /// The transformation matrix should be one column wider than the point matrix.
-Matrix applyMatrixTransformation(Matrix points, const Matrix& transform);
+Matrix applyTransformation(Matrix points, const Matrix& transform);
+
+/// Loads a matrix from a delimited text file.
+Matrix loadMatrixFromFile(const std::string& path, const char delimiter=' ');
 
 }  // namespace cpd

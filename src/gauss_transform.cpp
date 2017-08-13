@@ -17,10 +17,17 @@
 
 #define _USE_MATH_DEFINES
 
-#include <cpd/gauss_transform.hpp>
 #include <cmath>
+#include <cpd/gauss_transform.hpp>
 
 namespace cpd {
+
+GaussTransform::~GaussTransform() {
+}
+
+std::unique_ptr<GaussTransform> GaussTransform::makeDefault() {
+	return std::unique_ptr < GaussTransform > (new GaussTransformDirect());
+}
 
 Probabilities GaussTransformDirect::computeEStep(const Matrix& fixed,
 																								 const Matrix& moving,
@@ -30,7 +37,7 @@ Probabilities GaussTransformDirect::computeEStep(const Matrix& fixed,
 	size_t cols = fixed.cols();
 	double outlier_tmp = (outliers * moving.rows()
 												* std::pow(-ksig * M_PI, 0.5 * cols))
-												/ ((1 - outliers) * fixed.rows());
+											 / ((1 - outliers) * fixed.rows());
 	Vector p = Vector::Zero(moving.rows());
 	Vector p1 = Vector::Zero(moving.rows());
 	Vector pt1 = Vector::Zero(fixed.rows());
@@ -61,13 +68,6 @@ Probabilities GaussTransformDirect::computeEStep(const Matrix& fixed,
 	l += cols * fixed.rows() * std::log(sigma2) / 2;
 
 	return {p1, pt1, px, l};
-}
-
-GaussTransform::~GaussTransform() {
-}
-
-std::unique_ptr<GaussTransform> GaussTransform::makeDefault() {
-	return std::unique_ptr < GaussTransform > (new GaussTransformDirect());
 }
 
 }  // namespace cpd
