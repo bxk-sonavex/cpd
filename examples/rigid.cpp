@@ -19,18 +19,73 @@
 #include <cpd/rigid.hpp>
 #include <fstream>
 #include <iostream>
-
+#include <boost/thread/thread.hpp>
 #include <pcl/io/pcd_io.h>
-#include <pcl/filters/voxel_grid.h>
 #include <pcl/console/print.h>
 #include <pcl/console/parse.h>
 #include <pcl/console/time.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/search/kdtree.h>
+#include <pcl/visualization/pcl_visualizer.h>
 
 float default_sigma = 0.0f;
 float default_leaf_size = 0.1f;
 std::string default_field("z");
 double default_filter_min = -std::numeric_limits<double>::max();
 double default_filter_max = std::numeric_limits<double>::max();
+
+float computeHausdorffDistance(pcl::PointCloud<pcl::PointXYZ> &pcA,
+															 pcl::PointCloud<pcl::PointXYZ> &pcB) {
+	// Estimate
+	pcl::console::TicToc tt;
+	tt.tic();
+
+	pcl::console::print_highlight(stderr, "Computing Hausdorff distance ");
+
+	// compare A to B
+	float max_dist_a = -std::numeric_limits<float>::max();
+//	pcl::search::KdTree<pcl::PointXYZ> tree_b;
+//	tree_b.setInputCloud(pcB.makeShared());
+//	for (size_t i = 0; i < pcA.points.size(); ++i) {
+//		std::vector<int> indices(1);
+//		std::vector<float> sqr_distances(1);
+//
+//		tree_b.nearestKSearch(pcA.points[i], 1, indices, sqr_distances);
+//		if (sqr_distances[0] > max_dist_a)
+//			max_dist_a = sqr_distances[0];
+//	}
+//
+	// compare B to A
+	float max_dist_b = -std::numeric_limits<float>::max();
+//	pcl::search::KdTree<pcl::PointXYZ> tree_a;
+//	tree_a.setInputCloud(pcA.makeShared());
+//	for (size_t i = 0; i < pcB.points.size(); ++i) {
+//		std::vector<int> indices(1);
+//		std::vector<float> sqr_distances(1);
+//
+//		tree_a.nearestKSearch(pcB.points[i], 1, indices, sqr_distances);
+//		if (sqr_distances[0] > max_dist_b)
+//			max_dist_b = sqr_distances[0];
+//	}
+
+	max_dist_a = std::sqrt(max_dist_a);
+	max_dist_b = std::sqrt(max_dist_b);
+
+	float dist = std::max(max_dist_a, max_dist_b);
+
+	pcl::console::print_info("[done, ");
+	pcl::console::print_value("%g", tt.toc());
+	pcl::console::print_info(" ms : ");
+	pcl::console::print_info("A->B: ");
+	pcl::console::print_value("%f", max_dist_a);
+	pcl::console::print_info(", B->A: ");
+	pcl::console::print_value("%f", max_dist_b);
+	pcl::console::print_info(", Hausdorff Distance: ");
+	pcl::console::print_value("%f", dist);
+	pcl::console::print_info(" ]\n");
+
+	return dist;
+}
 
 void printHelp(int, char **argv) {
 	pcl::console::print_error("Syntax is: %s fixed.pcd moving.pcd outfile.pcd <options>\n",
@@ -126,6 +181,34 @@ void saveCloud(const std::string &filename,
 	pcl::console::print_info(" points]\n");
 }
 
+void visClouds(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
+							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcMoving) {
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
+			new pcl::visualization::PCLVisualizer("3D Viewer"));
+	viewer->setBackgroundColor(0, 0, 0);
+	viewer->addCoordinateSystem(1.0);
+	viewer->addPointCloud<pcl::PointXYZ>(pcFixed, "Fixed");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0f,
+																					 0.0f,
+																					 0.0f, "Fixed");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+																					 1,
+																					 "Fixed");
+
+	viewer->addPointCloud<pcl::PointXYZ>(pcMoving, "Moving");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0f,
+																					 1.0f,
+																					 0.0f, "Moving");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+																					 1,
+																					 "Moving");
+	viewer->initCameraParameters();
+	while (!viewer->wasStopped()) {
+		viewer->spinOnce(100);
+		boost::this_thread::sleep(boost::posix_time::microseconds(100000));
+	}
+}
+
 int main(int argc, char** argv) {
 	double execTime;
 	clock_t clockStart;
@@ -202,25 +285,31 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 	// Load the second file (moving point cloud)
-	pcl::PointCloud<pcl::PointXYZ> pcMoving;
-	if (!loadCloud(argv[idxFiles[1]], pcMoving)) {
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pcMoving(new pcl::PointCloud<pcl::PointXYZ>);
+	if (!loadCloud(argv[idxFiles[1]], *pcMoving)) {
 		return -1;
 	}
 
-	// Apply the voxel grid downsampling
+	computeHausdorffDistance(*pcFixed, *pcMoving);
+
+// Apply the voxel grid downsampling
 	pcl::PointCloud<pcl::PointXYZ> pcFixedDownsampled;
 	downsample(pcFixed, pcFixedDownsampled, leaf_x, leaf_y, leaf_z, field, fmin, fmax);
 
-	// Save into the third file
+	computeHausdorffDistance(pcFixedDownsampled, *pcMoving);
+
+// Save into the third file
 //	saveCloud(argv[idxFiles[2]], pcFixedDownsampled);
 
 // Get Eigen matrix
-	cpd::Matrix ptsMoving = pcMoving.getMatrixXfMap().transpose();
-	ptsMoving.conservativeResize(ptsMoving.rows(), ptsMoving.cols() - 1);
+	cpd::Matrix ptsMoving = pcMoving->getMatrixXfMap().transpose();
+	assert(ptsMoving.cols() > 3);
+	ptsMoving.conservativeResize(ptsMoving.rows(), 3);
 //	std::cout << "(Eigen) #row : " << ptsMoving.rows()
 //						<< " #col : " << ptsMoving.cols() << std::endl;
 	cpd::Matrix ptsFixed = pcFixedDownsampled.getMatrixXfMap().transpose();
-	ptsFixed.conservativeResize(ptsFixed.rows(), ptsFixed.cols() - 1);
+	assert(ptsFixed.cols() > 3);
+	ptsFixed.conservativeResize(ptsFixed.rows(), 3);
 
 	// Perform rigid registration
 	clockStart = clock();
@@ -243,6 +332,8 @@ int main(int argc, char** argv) {
 	outfile.close();
 	std::cout << "] done" << std::endl;
 
+	// viz initialization and result
+	visClouds(pcFixed, pcMoving);
 	return 0;
 }
 
