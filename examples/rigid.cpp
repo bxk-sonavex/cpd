@@ -17,15 +17,13 @@
 
 // #include <cpd/jsoncpp.hpp>
 #include <cpd/rigid.hpp>
-#include <fstream>
-#include <iostream>
 #include <boost/thread/thread.hpp>
 #include <pcl/io/pcd_io.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/search/kdtree.h>
 #include <pcl/console/print.h>
 #include <pcl/console/parse.h>
 #include <pcl/console/time.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/search/kdtree.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
 float default_sigma = 0.0f;
@@ -34,6 +32,22 @@ std::string default_field("z");
 double default_filter_min = -std::numeric_limits<double>::max();
 double default_filter_max = std::numeric_limits<double>::max();
 
+float computeDistanceAB(pcl::PointCloud<pcl::PointXYZ> &pcA,
+												pcl::PointCloud<pcl::PointXYZ> &pcB) {
+	float max_dist = -std::numeric_limits<float>::max();
+	pcl::search::KdTree<pcl::PointXYZ> tree_b;
+	tree_b.setInputCloud(pcB.makeShared());
+	for (size_t i = 0; i < pcA.points.size(); ++i) {
+		std::vector<int> indices(1);
+		std::vector<float> sqr_distances(1);
+		tree_b.nearestKSearch(pcA.points[i], 1, indices, sqr_distances);
+		if (sqr_distances[0] > max_dist)
+			max_dist = sqr_distances[0];
+	}
+
+	return std::sqrt(max_dist);
+}
+
 float computeHausdorffDistance(pcl::PointCloud<pcl::PointXYZ> &pcA,
 															 pcl::PointCloud<pcl::PointXYZ> &pcB) {
 	// Estimate
@@ -41,36 +55,8 @@ float computeHausdorffDistance(pcl::PointCloud<pcl::PointXYZ> &pcA,
 	tt.tic();
 
 	pcl::console::print_highlight(stderr, "Computing Hausdorff distance ");
-
-	// compare A to B
-	float max_dist_a = -std::numeric_limits<float>::max();
-//	pcl::search::KdTree<pcl::PointXYZ> tree_b;
-//	tree_b.setInputCloud(pcB.makeShared());
-//	for (size_t i = 0; i < pcA.points.size(); ++i) {
-//		std::vector<int> indices(1);
-//		std::vector<float> sqr_distances(1);
-//
-//		tree_b.nearestKSearch(pcA.points[i], 1, indices, sqr_distances);
-//		if (sqr_distances[0] > max_dist_a)
-//			max_dist_a = sqr_distances[0];
-//	}
-//
-	// compare B to A
-	float max_dist_b = -std::numeric_limits<float>::max();
-//	pcl::search::KdTree<pcl::PointXYZ> tree_a;
-//	tree_a.setInputCloud(pcA.makeShared());
-//	for (size_t i = 0; i < pcB.points.size(); ++i) {
-//		std::vector<int> indices(1);
-//		std::vector<float> sqr_distances(1);
-//
-//		tree_a.nearestKSearch(pcB.points[i], 1, indices, sqr_distances);
-//		if (sqr_distances[0] > max_dist_b)
-//			max_dist_b = sqr_distances[0];
-//	}
-
-	max_dist_a = std::sqrt(max_dist_a);
-	max_dist_b = std::sqrt(max_dist_b);
-
+	float max_dist_a = computeDistanceAB(pcA, pcB); // compare A to B
+	float max_dist_b = computeDistanceAB(pcB, pcA); // compare B to A
 	float dist = std::max(max_dist_a, max_dist_b);
 
 	pcl::console::print_info("[done, ");
@@ -113,11 +99,11 @@ void printHelp(int, char **argv) {
 	pcl::console::print_info(")\n");
 }
 
-void downsample(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &input,
-								pcl::PointCloud<pcl::PointXYZ> &output,
-								float leaf_x, float leaf_y, float leaf_z, const std::string &field,
-								double fmin,
-								double fmax) {
+void downsampleCloud(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &input,
+										 pcl::PointCloud<pcl::PointXYZ> &output,
+										 float leaf_x, float leaf_y, float leaf_z, const std::string &field,
+										 double fmin,
+										 double fmax) {
 	pcl::console::TicToc tt;
 	tt.tic();
 
@@ -135,8 +121,7 @@ void downsample(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &input,
 	pcl::console::print_info(" ms : ");
 	pcl::console::print_value("%d", output.width * output.height);
 	pcl::console::print_info(" points]\n");
-
-	std::cout << "width: " << output.width << ", height: " << output.height << std::endl;
+//	std::cout << "width: " << output.width << ", height: " << output.height << std::endl;
 }
 
 bool loadCloud(const std::string &filename,
@@ -155,11 +140,9 @@ bool loadCloud(const std::string &filename,
 	pcl::console::print_info(" ms : ");
 	pcl::console::print_value("%d", cloud.width * cloud.height);
 	pcl::console::print_info(" points]\n");
-	pcl::console::print_info("Available dimensions: ");
-	pcl::console::print_value("%s\n", pcl::getFieldsList(cloud).c_str());
-
-	std::cout << "width: " << cloud.width << ", height: " << cloud.height << std::endl;
-
+//	pcl::console::print_info("Available dimensions: ");
+//	pcl::console::print_value("%s\n", pcl::getFieldsList(cloud).c_str());
+//	std::cout << "width: " << cloud.width << ", height: " << cloud.height << std::endl;
 	return true;
 }
 
@@ -181,27 +164,26 @@ void saveCloud(const std::string &filename,
 	pcl::console::print_info(" points]\n");
 }
 
-void visClouds(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
-							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcMoving) {
+void addPointCloud(const boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer,
+									 const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc,
+									 const std::string& name, const float r, const float g, const float b) {
+	viewer->addPointCloud<pcl::PointXYZ>(pc, name);
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, r, g,
+																					 b, name);
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+																					 1, name);
+}
+
+void visClouds(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
+							 const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcMoving,
+							 const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcRegistered) {
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
-			new pcl::visualization::PCLVisualizer("3D Viewer"));
+			new pcl::visualization::PCLVisualizer("Rigid Registration"));
 	viewer->setBackgroundColor(0, 0, 0);
 	viewer->addCoordinateSystem(1.0);
-	viewer->addPointCloud<pcl::PointXYZ>(pcFixed, "Fixed");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0f,
-																					 0.0f,
-																					 0.0f, "Fixed");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
-																					 1,
-																					 "Fixed");
-
-	viewer->addPointCloud<pcl::PointXYZ>(pcMoving, "Moving");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, 1.0f,
-																					 1.0f,
-																					 0.0f, "Moving");
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
-																					 1,
-																					 "Moving");
+	addPointCloud(viewer, pcFixed, "Fixed", 1.0f, 1.0f, 1.0f);
+	addPointCloud(viewer, pcMoving, "Moving", 1.0f, 1.0f, 0.0f);
+	addPointCloud(viewer, pcRegistered, "Registered", 0.0f, 0.0f, 1.0f);
 	viewer->initCameraParameters();
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce(100);
@@ -229,13 +211,10 @@ int main(int argc, char** argv) {
 	// Command line parsing
 	float sigma = default_sigma;
 	pcl::console::parse_argument(argc, argv, "-sigma", sigma);
-	pcl::console::print_info("Using a sigma of: ");
-	pcl::console::print_value("%f\n", sigma);
 
 	float leaf_x = default_leaf_size,
 			leaf_y = default_leaf_size,
 			leaf_z = default_leaf_size;
-
 	std::vector<double> values;
 	pcl::console::parse_x_arguments(argc, argv, "-leaf", values);
 	if (values.size() == 1) {
@@ -290,23 +269,25 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
-	computeHausdorffDistance(*pcFixed, *pcMoving);
-
-// Apply the voxel grid downsampling
+	// Apply the voxel grid downsampling
 	pcl::PointCloud<pcl::PointXYZ> pcFixedDownsampled;
-	downsample(pcFixed, pcFixedDownsampled, leaf_x, leaf_y, leaf_z, field, fmin, fmax);
+	downsampleCloud(pcFixed, pcFixedDownsampled, leaf_x, leaf_y, leaf_z, field, fmin, fmax);
 
-	computeHausdorffDistance(pcFixedDownsampled, *pcMoving);
+	if (sigma == 0) {
+		sigma = computeHausdorffDistance(*pcFixed, *pcMoving);
+	}
+	else if (sigma == -1) {
+		sigma = computeHausdorffDistance(pcFixedDownsampled, *pcMoving);
+	}
+	else {
+	}
+	pcl::console::print_info("Using a sigma of: ");
+	pcl::console::print_value("%f\n", sigma);
 
-// Save into the third file
-//	saveCloud(argv[idxFiles[2]], pcFixedDownsampled);
-
-// Get Eigen matrix
+	// Get Eigen matrix
 	cpd::Matrix ptsMoving = pcMoving->getMatrixXfMap().transpose();
 	assert(ptsMoving.cols() > 3);
 	ptsMoving.conservativeResize(ptsMoving.rows(), 3);
-//	std::cout << "(Eigen) #row : " << ptsMoving.rows()
-//						<< " #col : " << ptsMoving.cols() << std::endl;
 	cpd::Matrix ptsFixed = pcFixedDownsampled.getMatrixXfMap().transpose();
 	assert(ptsFixed.cols() > 3);
 	ptsFixed.conservativeResize(ptsFixed.rows(), 3);
@@ -316,7 +297,7 @@ int main(int argc, char** argv) {
 	cpd::Rigid rigid;
 	rigid.sigma2(sigma);
 	cpd::RigidResult result = rigid.run(ptsFixed, ptsMoving);
-	// std::cout << cpd::to_json(result) << std::endl;
+// std::cout << cpd::to_json(result) << std::endl;
 	execTime = (double) (clock() - clockStart) / CLOCKS_PER_SEC;
 	std::cout << "Registration took " << execTime << " sec (CPU)" << std::endl;
 
@@ -325,15 +306,28 @@ int main(int argc, char** argv) {
 	std::cout << transform << std::endl;
 
 	// Save into the third file
-//	saveCloud(argv[idxFiles[2]], pcFixedDownsampled);
-	std::cout << "Save result to ... [" << argv[idxFiles[2]];
-	std::ofstream outfile(argv[idxFiles[2]]);
-	outfile << result.points << std::endl;
-	outfile.close();
-	std::cout << "] done" << std::endl;
+//	std::cout << result.points.rows() << ", " << result.points.cols() << std::endl;
+	assert(result.points.cols() == 3);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pcRegistered(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointXYZ point;
+	for (unsigned int i = 0; i < result.points.rows(); i++) {
+		point.x = result.points(i, 0);
+		point.y = result.points(i, 1);
+		point.z = result.points(i, 2);
+		pcRegistered->push_back(point);
+	}
+	saveCloud(argv[idxFiles[2]], *pcRegistered);
+
+	// Save to txt file although the extension is pcd
+//	std::cout << "Save result to ... [" << argv[idxFiles[2]];
+//	std::ofstream outfile(argv[idxFiles[2]]);
+//	outfile << result.points << std::endl;
+//	outfile.close();
+//	std::cout << "] done" << std::endl;
 
 	// viz initialization and result
-	visClouds(pcFixed, pcMoving);
+	visClouds(pcFixed, pcMoving, pcRegistered);
+
 	return 0;
 }
 
