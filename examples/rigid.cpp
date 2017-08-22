@@ -1,21 +1,3 @@
-// cpd - Coherent Point Drift
-// Copyright (C) 2017 Pete Gadomski <pete.gadomski@gmail.com>
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License along
-// with this program; if not, write to the Free Software Foundation, Inc.,
-// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
-// #include <cpd/jsoncpp.hpp>
 #include <cpd/rigid.hpp>
 #include <boost/thread/thread.hpp>
 #include <pcl/io/pcd_io.h>
@@ -25,12 +7,102 @@
 #include <pcl/console/parse.h>
 #include <pcl/console/time.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <Eigen/Dense>
 
 float default_sigma = 0.0f;
 float default_leaf_size = 0.1f;
 std::string default_field("z");
 double default_filter_min = -std::numeric_limits<double>::max();
 double default_filter_max = std::numeric_limits<double>::max();
+
+template<class T>
+typename std::enable_if<!std::numeric_limits<T>::is_integer, bool>::type
+almost_equal(T x, T y, int ulp) {
+	// The machine epsilon has to be scaled to the magnitude of the values used
+	// and multiplied by the desired precision in ULPs (units in the last place)
+	return std::abs(x - y) < std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp
+				 // unless the result is subnormal
+			|| std::abs(x - y) < std::numeric_limits<T>::min();
+}
+
+/***
+ * Checks if a matrix is a valid rotation matrix.
+ * @param
+ */
+bool isRotationMatrix(const cpd::Matrix &R) {
+	cpd::Matrix Rt = R.transpose();
+	cpd::Matrix shouldBeIdentity = Rt * R;
+	cpd::Matrix diff = shouldBeIdentity - Eigen::Matrix<float, 3, 3>::Identity();
+
+//	return diff.norm() < 1e-6;
+	return diff.norm() < std::numeric_limits<float>::epsilon();
+}
+
+/***
+ * Function: Get from a Mat to pcl pointcloud datatype
+ * @param[in] OpencVPointCloud Matrix of OpenCV cv::Mat format
+ * @param[out] PointCloud of pcl::PointCloud<pcl::PointXYZ> format
+ */
+//pcl::PointCloud<pcl::PointXYZ>::Ptr MatToPoinXYZ(cv::Mat OpencVPointCloud) {
+//	pcl::PointCloud<pcl::PointXYZ>::Ptr pcXYZ(new pcl::PointCloud<pcl::PointXYZ>);
+//
+//	for (int i = 0; i < OpencVPointCloud.cols; i++) {
+//		pcl::PointXYZ point;
+//		point.x = OpencVPointCloud.at<float>(0, i);
+//		point.y = OpencVPointCloud.at<float>(1, i);
+//		point.z = OpencVPointCloud.at<float>(2, i);
+//		pcXYZ->points.push_back(point);
+//	}
+//	pcXYZ->width = (int) pcXYZ->points.size();
+//	pcXYZ->height = 1;
+//
+//	return pcXYZ;
+//}
+//
+//cv::Mat PoinXYZToMat(pcl::PointCloud<pcl::PointXYZ>::ConstPtr &pcXYZ) {
+//	cv::Mat OpenCVPointCloud(3, pcXYZ.size(), CV_64FC1);
+//	for (int i = 0; i < point_cloud_ptr->points.size(); i++) {
+//		OpenCVPointCloud.at<double>(0, i) = pcXYZ->points.at(i).x;
+//		OpenCVPointCloud.at<double>(1, i) = pcXYZ->points.at(i).y;
+//		OpenCVPointCloud.at<double>(2, i) = pcXYZ->points.at(i).z;
+//	}
+//
+//	return OpenCVPointCloud;
+//}
+
+/***
+ * Calculates rotation matrix to Euler angles
+ */
+Eigen::Vector3f rotationMatrixToEulerAngles(const cpd::Matrix &R) {
+	pcl::console::TicToc tt;
+	tt.tic();
+
+	assert(isRotationMatrix(R));
+
+	pcl::console::print_highlight(stderr, "Converting to Euler angles ");
+	float sy = sqrt(R(0, 0) * R(0, 0) + R(1, 0) * R(1, 0));
+	bool singular = sy < std::numeric_limits<float>::epsilon();
+
+	float x, y, z;
+	if (!singular) {
+		x = std::atan2(R(2, 1), R(2, 2));
+		y = std::atan2(-R(2, 0), sy);
+		z = std::atan2(R(1, 0), R(0, 0));
+	}
+	else {
+		x = std::atan2(-R(1, 2), R(1, 1));
+		y = std::atan2(-R(2, 0), sy);
+		z = 0;
+	}
+
+	pcl::console::print_info("[done, ");
+	pcl::console::print_value("%g", tt.toc());
+	pcl::console::print_info(" ms : Euler angles: ");
+	pcl::console::print_value("%f, %f, %f", x, y, z);
+	pcl::console::print_info(" ]\n");
+
+	return Eigen::Vector3f(x, y, z);
+}
 
 float computeDistanceAB(pcl::PointCloud<pcl::PointXYZ> &pcA,
 												pcl::PointCloud<pcl::PointXYZ> &pcB) {
@@ -41,8 +113,9 @@ float computeDistanceAB(pcl::PointCloud<pcl::PointXYZ> &pcA,
 		std::vector<int> indices(1);
 		std::vector<float> sqr_distances(1);
 		tree_b.nearestKSearch(pcA.points[i], 1, indices, sqr_distances);
-		if (sqr_distances[0] > max_dist)
+		if (sqr_distances[0] > max_dist) {
 			max_dist = sqr_distances[0];
+		}
 	}
 
 	return std::sqrt(max_dist);
@@ -55,8 +128,8 @@ float computeHausdorffDistance(pcl::PointCloud<pcl::PointXYZ> &pcA,
 	tt.tic();
 
 	pcl::console::print_highlight(stderr, "Computing Hausdorff distance ");
-	float max_dist_a = computeDistanceAB(pcA, pcB); // compare A to B
-	float max_dist_b = computeDistanceAB(pcB, pcA); // compare B to A
+	float max_dist_a = computeDistanceAB(pcA, pcB);  // compare A to B
+	float max_dist_b = computeDistanceAB(pcB, pcA);  // compare B to A
 	float dist = std::max(max_dist_a, max_dist_b);
 
 	pcl::console::print_info("[done, ");
@@ -165,25 +238,47 @@ void saveCloud(const std::string &filename,
 }
 
 void addPointCloud(const boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer,
-									 const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc,
+									 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc,
 									 const std::string& name, const float r, const float g, const float b) {
 	viewer->addPointCloud<pcl::PointXYZ>(pc, name);
 	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, r, g,
-																					 b, name);
+																					 b,
+																					 name);
 	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
-																					 1, name);
+																					 1,
+																					 name);
 }
 
-void visClouds(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
-							 const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcMoving,
-							 const pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcRegistered) {
+/***
+ *
+ */
+void visResult(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
+							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcMoving,
+							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcRegistered,
+							 const Eigen::MatrixXf &roi) {
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
-			new pcl::visualization::PCLVisualizer("Rigid Registration"));
+			new pcl::visualization::PCLVisualizer("Marker Registration"));
 	viewer->setBackgroundColor(0, 0, 0);
-	viewer->addCoordinateSystem(1.0);
+	viewer->addCoordinateSystem(1.0, "first");
 	addPointCloud(viewer, pcFixed, "Fixed", 1.0f, 1.0f, 1.0f);
 	addPointCloud(viewer, pcMoving, "Moving", 1.0f, 1.0f, 0.0f);
 	addPointCloud(viewer, pcRegistered, "Registered", 0.0f, 0.0f, 1.0f);
+
+	/// @TODO Viz Doppler ROI
+	// Display a rectangle in 3D cutting through the center peaks of the registered marker
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pcROI(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointXYZ point;
+	for (unsigned int i = 0; i < roi.rows(); i++) {
+		point.x = roi(i, 0);
+		point.y = roi(i, 1);
+		point.z = roi(i, 2);
+		pcROI->push_back(point);
+	}
+	viewer->addPolygon<pcl::PointXYZ>(pcROI, 0.0f, 0.0f, 1.0f, "DopplerROI");
+	viewer->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 6, "DopplerROI");
+
+	viewer->setRepresentationToSurfaceForAllActors();
+
 	viewer->initCameraParameters();
 	while (!viewer->wasStopped()) {
 		viewer->spinOnce(100);
@@ -195,6 +290,7 @@ int main(int argc, char** argv) {
 	double execTime;
 	clock_t clockStart;
 
+	pcl::console::print_highlight("Parsing inputs\n");
 	if (argc < 4) {
 		printHelp(argc, argv);
 		return -1;
@@ -208,7 +304,18 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
-	// Command line parsing
+	// Load the first file (fixed point cloud)
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pcFixed(new pcl::PointCloud<pcl::PointXYZ>);
+	if (!loadCloud(argv[idxFiles[0]], *pcFixed)) {
+		return -1;
+	}
+	// Load the second file (moving point cloud)
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pcMoving(new pcl::PointCloud<pcl::PointXYZ>);
+	if (!loadCloud(argv[idxFiles[1]], *pcMoving)) {
+		return -1;
+	}
+
+	// Parse command line options
 	float sigma = default_sigma;
 	pcl::console::parse_argument(argc, argv, "-sigma", sigma);
 
@@ -232,46 +339,43 @@ int main(int argc, char** argv) {
 				"Leaf size must be specified with either 1 or 3 numbers (%lu given).\n",
 				values.size());
 	}
-	pcl::console::print_info("Using a leaf size of: ");
-	pcl::console::print_value("%f, %f, %f\n", leaf_x, leaf_y, leaf_z);
 
-	std::string field(default_field);
-	pcl::console::parse_argument(argc, argv, "-field", field);
-	double fmin = default_filter_min,
-			fmax = default_filter_max;
-	pcl::console::parse_argument(argc, argv, "-fmin", fmin);
-	pcl::console::parse_argument(argc, argv, "-fmax", fmax);
-	pcl::console::print_info("Filtering data on field: ");
-	pcl::console::print_value("%s", field.c_str());
-	pcl::console::print_info(" between: ");
-	if (fmin == -std::numeric_limits<double>::max()) {
-		pcl::console::print_value("-inf ->");
-	}
-	else {
-		pcl::console::print_value("%f ->", fmin);
-	}
-
-	if (fmax == std::numeric_limits<double>::max()) {
-		pcl::console::print_value("inf\n");
-	}
-	else {
-		pcl::console::print_value("%f\n", fmax);
-	}
-
-	// Load the first file (fixed point cloud)
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pcFixed(new pcl::PointCloud<pcl::PointXYZ>);
-	if (!loadCloud(argv[idxFiles[0]], *pcFixed)) {
-		return -1;
-	}
-	// Load the second file (moving point cloud)
-	pcl::PointCloud<pcl::PointXYZ>::Ptr pcMoving(new pcl::PointCloud<pcl::PointXYZ>);
-	if (!loadCloud(argv[idxFiles[1]], *pcMoving)) {
-		return -1;
-	}
-
-	// Apply the voxel grid downsampling
+	bool performDownsample = ((leaf_x * leaf_y * leaf_z) == 0) ? false : true;
 	pcl::PointCloud<pcl::PointXYZ> pcFixedDownsampled;
-	downsampleCloud(pcFixed, pcFixedDownsampled, leaf_x, leaf_y, leaf_z, field, fmin, fmax);
+	if (performDownsample) {
+		pcl::console::print_info("Using a leaf size of: ");
+		pcl::console::print_value("%f, %f, %f\n", leaf_x, leaf_y, leaf_z);
+
+		std::string field(default_field);
+		pcl::console::parse_argument(argc, argv, "-field", field);
+		double fmin = default_filter_min,
+				fmax = default_filter_max;
+		pcl::console::parse_argument(argc, argv, "-fmin", fmin);
+		pcl::console::parse_argument(argc, argv, "-fmax", fmax);
+		pcl::console::print_info("Filtering data on field: ");
+		pcl::console::print_value("%s", field.c_str());
+		pcl::console::print_info(" between: ");
+		if (fmin == -std::numeric_limits<double>::max()) {
+			pcl::console::print_value("-inf ->");
+		}
+		else {
+			pcl::console::print_value("%f ->", fmin);
+		}
+
+		if (fmax == std::numeric_limits<double>::max()) {
+			pcl::console::print_value("inf\n");
+		}
+		else {
+			pcl::console::print_value("%f\n", fmax);
+		}
+
+		// Apply the voxel grid downsampling
+		downsampleCloud(pcFixed, pcFixedDownsampled, leaf_x, leaf_y, leaf_z, field, fmin,
+										fmax);
+	}
+	else {
+		pcFixedDownsampled = *pcFixed;
+	}
 
 	if (sigma == 0) {
 		sigma = computeHausdorffDistance(*pcFixed, *pcMoving);
@@ -293,17 +397,46 @@ int main(int argc, char** argv) {
 	ptsFixed.conservativeResize(ptsFixed.rows(), 3);
 
 	// Perform rigid registration
-	clockStart = clock();
-	cpd::Rigid rigid;
-	rigid.sigma2(sigma);
-	cpd::RigidResult result = rigid.run(ptsFixed, ptsMoving);
-// std::cout << cpd::to_json(result) << std::endl;
-	execTime = (double) (clock() - clockStart) / CLOCKS_PER_SEC;
-	std::cout << "Registration took " << execTime << " sec (CPU)" << std::endl;
+	pcl::console::TicToc tt;
+	tt.tic();
 
-	cpd::Matrix transform = result.matrix();
-	std::cout << "Transformation Matrix" << std::endl;
-	std::cout << transform << std::endl;
+	pcl::console::print_highlight("Performing registration\n");
+	cpd::Rigid rigid;
+	rigid.setSigma2(sigma);
+	cpd::RigidResult result = rigid.run(ptsFixed, ptsMoving);
+
+	pcl::console::print_info("[done, ");
+	pcl::console::print_value("%g", tt.toc());
+	pcl::console::print_info(" ms]\n");
+
+	// Compute motor position (center of the marker)
+	cpd::Matrix maxCoeff = result.points.colwise().maxCoeff(),
+							minCoeff = result.points.colwise().minCoeff();
+	cpd::Matrix aveCoeff = (maxCoeff + minCoeff) / 2.0f;
+  float motorPosition = aveCoeff(2);
+  float ratio = 2.4 / 4;	// channel
+  float offset = (maxCoeff - minCoeff)(0) * ratio / 2;
+
+	Eigen::MatrixXf roi = Eigen::MatrixXf::Constant(4, 3, motorPosition);
+	roi.col(0) << aveCoeff(0) - offset, aveCoeff(0) + offset,
+								aveCoeff(0) + offset, aveCoeff(0) - offset;
+	roi.col(1) << minCoeff(1), minCoeff(1), maxCoeff(1), maxCoeff(1);
+
+  std::cout << "Motor position: " << motorPosition << std::endl;
+  std::cout << "Doppler ROI: (" << minCoeff(1) << ", "
+  					<< aveCoeff(0) - offset << ", " << maxCoeff(1)  << ", "
+						<< aveCoeff(0) + offset << ")" << std::endl;
+  std::cout << "Doppler ROI: \n" << roi << std::endl;
+
+	// Convert transformation matrix to Euler angles
+	cpd::Matrix mtxTransform = result.matrix();
+	Eigen::Vector3f angles = rotationMatrixToEulerAngles(mtxTransform);
+	angles = angles * 180 / M_PI;
+
+	pcl::console::print_info("Transformation matrix:\n");
+	std::cout << mtxTransform << std::endl;
+	pcl::console::print_info("Euler angles (deg.): ");
+	pcl::console::print_value("%f, %f, %f\n", angles(0), angles(1), angles(2));
 
 	// Save into the third file
 //	std::cout << result.points.rows() << ", " << result.points.cols() << std::endl;
@@ -316,6 +449,8 @@ int main(int argc, char** argv) {
 		point.z = result.points(i, 2);
 		pcRegistered->push_back(point);
 	}
+	pcRegistered->width = (int) pcRegistered->points.size();
+	pcRegistered->height = 1;
 	saveCloud(argv[idxFiles[2]], *pcRegistered);
 
 	// Save to txt file although the extension is pcd
@@ -326,7 +461,7 @@ int main(int argc, char** argv) {
 //	std::cout << "] done" << std::endl;
 
 	// viz initialization and result
-	visClouds(pcFixed, pcMoving, pcRegistered);
+	visResult(pcFixed, pcMoving, pcRegistered, roi);
 
 	return 0;
 }
