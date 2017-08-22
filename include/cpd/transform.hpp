@@ -72,31 +72,31 @@ public:
 	}
 
 	/// Sets the gauss transform.
-	Transform& gauss_transform(std::unique_ptr<GaussTransform> gauss_transform) {
+	Transform& setGaussTransform(std::unique_ptr<GaussTransform> gauss_transform) {
 		this->m_GaussTransform = std::move(gauss_transform);
 		return *this;
 	}
 
 	/// Sets the max iterations for this transform.
-	Transform& max_iterations(double max_iterations) {
+	Transform& setMaxIterations(double max_iterations) {
 		this->m_MaxIterations = max_iterations;
 		return *this;
 	}
 
 	/// Sets the outlier tolerance.
-	Transform& outliers(double outliers) {
+	Transform& setOutliers(double outliers) {
 		this->m_outliers = outliers;
 		return *this;
 	}
 
 	/// Sets the sigma2 value for this transform.
-	Transform& sigma2(double sigma2) {
+	Transform& setSigma2(double sigma2) {
 		this->m_sigma2 = sigma2;
 		return *this;
 	}
 
 	/// Sets the final tolerance.
-	Transform& tolerance(double tolerance) {
+	Transform& setTolerance(double tolerance) {
 		this->m_tolerance = tolerance;
 		return *this;
 	}

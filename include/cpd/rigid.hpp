@@ -49,7 +49,7 @@ public:
 	Rigid();
 
 	/// Sets whether this rigid transform allows reflections.
-	Rigid& reflections(bool reflections);
+	Rigid& setReflections(bool reflections);
 
 	/// Computes one iteration of the rigid transformation.
 	RigidResult computeMStep(const Matrix& fixed, const Matrix& moving,

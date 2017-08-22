@@ -25,7 +25,7 @@ Rigid::Rigid()
 }
 
 /// Sets whether this rigid transform allows reflections.
-Rigid& Rigid::reflections(bool reflections) {
+Rigid& Rigid::setReflections(bool reflections) {
 	m_reflections = reflections;
 	return *this;
 }
