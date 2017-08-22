@@ -69,7 +69,6 @@ bool isRotationMatrix(const cpd::Matrix &R) {
 //
 //	return OpenCVPointCloud;
 //}
-
 /***
  * Calculates rotation matrix to Euler angles
  */
@@ -237,14 +236,14 @@ void saveCloud(const std::string &filename,
 	pcl::console::print_info(" points]\n");
 }
 
-void addPointCloud(const boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer,
+void addPointCloud(pcl::visualization::PCLVisualizer &viewer,
 									 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc,
 									 const std::string& name, const float r, const float g, const float b) {
-	viewer->addPointCloud<pcl::PointXYZ>(pc, name);
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, r, g,
+	viewer.addPointCloud<pcl::PointXYZ>(pc, name);
+	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, r, g,
 																					 b,
 																					 name);
-	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
+	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
 																					 1,
 																					 name);
 }
@@ -256,16 +255,13 @@ void visResult(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
 							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcMoving,
 							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcRegistered,
 							 const Eigen::MatrixXf &roi) {
-	boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
-			new pcl::visualization::PCLVisualizer("Marker Registration"));
-	viewer->setBackgroundColor(0, 0, 0);
-	viewer->addCoordinateSystem(1.0, "first");
+	pcl::visualization::PCLVisualizer viewer("Marker Registration");
+
 	addPointCloud(viewer, pcFixed, "Fixed", 1.0f, 1.0f, 1.0f);
 	addPointCloud(viewer, pcMoving, "Moving", 1.0f, 1.0f, 0.0f);
 	addPointCloud(viewer, pcRegistered, "Registered", 0.0f, 0.0f, 1.0f);
 
-	/// @TODO Viz Doppler ROI
-	// Display a rectangle in 3D cutting through the center peaks of the registered marker
+	// Display Doppler ROI as a 3D plan cutting through the center peaks of the registered marker
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pcROI(new pcl::PointCloud<pcl::PointXYZ>);
 	pcl::PointXYZ point;
 	for (unsigned int i = 0; i < roi.rows(); i++) {
@@ -274,14 +270,16 @@ void visResult(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
 		point.z = roi(i, 2);
 		pcROI->push_back(point);
 	}
-	viewer->addPolygon<pcl::PointXYZ>(pcROI, 0.0f, 0.0f, 1.0f, "DopplerROI");
-	viewer->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 6, "DopplerROI");
+	viewer.addPolygon<pcl::PointXYZ>(pcROI, 0.0f, 0.0f, 1.0f, "DopplerROI");
+	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 6,
+																		 "DopplerROI");
 
-	viewer->setRepresentationToSurfaceForAllActors();
-
-	viewer->initCameraParameters();
-	while (!viewer->wasStopped()) {
-		viewer->spinOnce(100);
+	viewer.setBackgroundColor(0, 0, 0);
+	viewer.addCoordinateSystem(1.0, "first");
+	viewer.setRepresentationToSurfaceForAllActors();
+	viewer.initCameraParameters();
+	while (!viewer.wasStopped()) {
+		viewer.spinOnce(100);
 		boost::this_thread::sleep(boost::posix_time::microseconds(100000));
 	}
 }
@@ -411,22 +409,24 @@ int main(int argc, char** argv) {
 
 	// Compute motor position (center of the marker)
 	cpd::Matrix maxCoeff = result.points.colwise().maxCoeff(),
-							minCoeff = result.points.colwise().minCoeff();
+			minCoeff = result.points.colwise().minCoeff();
 	cpd::Matrix aveCoeff = (maxCoeff + minCoeff) / 2.0f;
-  float motorPosition = aveCoeff(2);
-  float ratio = 2.4 / 4;	// channel
-  float offset = (maxCoeff - minCoeff)(0) * ratio / 2;
+	float motorPosition = aveCoeff(2);
+	float ratio = 2.4 / 4;	// channel
+	float offset = (maxCoeff - minCoeff)(0) * ratio / 2;
 
 	Eigen::MatrixXf roi = Eigen::MatrixXf::Constant(4, 3, motorPosition);
 	roi.col(0) << aveCoeff(0) - offset, aveCoeff(0) + offset,
-								aveCoeff(0) + offset, aveCoeff(0) - offset;
+			aveCoeff(0) + offset, aveCoeff(0) - offset;
 	roi.col(1) << minCoeff(1), minCoeff(1), maxCoeff(1), maxCoeff(1);
 
-  std::cout << "Motor position: " << motorPosition << std::endl;
-  std::cout << "Doppler ROI: (" << minCoeff(1) << ", "
-  					<< aveCoeff(0) - offset << ", " << maxCoeff(1)  << ", "
-						<< aveCoeff(0) + offset << ")" << std::endl;
-  std::cout << "Doppler ROI: \n" << roi << std::endl;
+	std::cout << "Motor position: " << motorPosition << std::endl;
+	std::cout << "Doppler ROI: (" << minCoeff(1) << ", "
+	<< aveCoeff(0) - offset
+	<< ", " << maxCoeff(1) << ", "
+	<< aveCoeff(0) + offset
+	<< ")" << std::endl;
+	std::cout << "Doppler ROI: \n" << roi << std::endl;
 
 	// Convert transformation matrix to Euler angles
 	cpd::Matrix mtxTransform = result.matrix();
