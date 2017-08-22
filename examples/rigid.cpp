@@ -1,6 +1,7 @@
 #include <cpd/rigid.hpp>
 #include <boost/thread/thread.hpp>
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/console/print.h>
@@ -204,6 +205,7 @@ bool loadCloud(const std::string &filename,
 
 	tt.tic();
 	if (pcl::io::loadPCDFile(filename, cloud) < 0) {
+	// if (pcl::io::loadPLYFile(filename, cloud) < 0) {
 		return false;
 	}
 
@@ -219,26 +221,28 @@ bool loadCloud(const std::string &filename,
 }
 
 void saveCloud(const std::string &filename,
-							 const pcl::PointCloud<pcl::PointXYZ> &output) {
+							 const pcl::PointCloud<pcl::PointXYZ> &cloud) {
 	pcl::console::TicToc tt;
 	tt.tic();
 
 	pcl::console::print_highlight("Saving ");
 	pcl::console::print_value("%s ", filename.c_str());
 
-	pcl::PCDWriter w;
-	w.writeBinaryCompressed(filename, output);
+	// pcl::PCDWriter w;
+	// w.writeBinaryCompressed(filename, cloud);
+	pcl::io::savePCDFileBinaryCompressed(filename, cloud);
+	// pcl::io::savePLYFile(filename, cloud);
 
 	pcl::console::print_info("[done, ");
 	pcl::console::print_value("%g", tt.toc());
 	pcl::console::print_info(" ms : ");
-	pcl::console::print_value("%d", output.width * output.height);
+	pcl::console::print_value("%d", cloud.width * cloud.height);
 	pcl::console::print_info(" points]\n");
 }
 
-void addPointCloud(pcl::visualization::PCLVisualizer &viewer,
-									 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc,
-									 const std::string& name, const float r, const float g, const float b) {
+void addCloudViz(pcl::visualization::PCLVisualizer &viewer,
+								 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc, const std::string& name,
+								 const float r, const float g, const float b) {
 	viewer.addPointCloud<pcl::PointXYZ>(pc, name);
 	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, r, g,
 																					 b,
@@ -257,9 +261,9 @@ void visResult(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
 							 const Eigen::MatrixXf &roi) {
 	pcl::visualization::PCLVisualizer viewer("Marker Registration");
 
-	addPointCloud(viewer, pcFixed, "Fixed", 1.0f, 1.0f, 1.0f);
-	addPointCloud(viewer, pcMoving, "Moving", 1.0f, 1.0f, 0.0f);
-	addPointCloud(viewer, pcRegistered, "Registered", 0.0f, 0.0f, 1.0f);
+	addCloudViz(viewer, pcFixed, "Fixed", 1.0f, 1.0f, 1.0f);
+	addCloudViz(viewer, pcMoving, "Moving", 1.0f, 1.0f, 0.0f);
+	addCloudViz(viewer, pcRegistered, "Registered", 0.0f, 0.0f, 1.0f);
 
 	// Display Doppler ROI as a 3D plan cutting through the center peaks of the registered marker
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pcROI(new pcl::PointCloud<pcl::PointXYZ>);
