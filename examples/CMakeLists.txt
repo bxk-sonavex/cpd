@@ -27,4 +27,4 @@ link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
 add_executable(cpd-rigid rigid.cpp)
-target_link_libraries(cpd-rigid PRIVATE Cpd::Library-C++ ${PCL_LIBRARIES})
+target_link_libraries(cpd-rigid PRIVATE Cpd::Library-C++ ${PCL_LIBRARIES} pcl_io_ply)

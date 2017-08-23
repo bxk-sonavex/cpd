@@ -1,6 +1,5 @@
 #include <cpd/rigid.hpp>
 #include <boost/thread/thread.hpp>
-#include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/search/kdtree.h>
@@ -40,7 +39,7 @@ bool isRotationMatrix(const cpd::Matrix &R) {
 }
 
 /***
- * Function: Get from a Mat to pcl pointcloud datatype
+ * Function: Get from a cv::Mat to a pcl::PointCloud<pcl::PointXYZ>
  * @param[in] OpencVPointCloud Matrix of OpenCV cv::Mat format
  * @param[out] PointCloud of pcl::PointCloud<pcl::PointXYZ> format
  */
@@ -73,7 +72,7 @@ bool isRotationMatrix(const cpd::Matrix &R) {
 /***
  * Calculates rotation matrix to Euler angles
  */
-Eigen::Vector3f rotationMatrixToEulerAngles(const cpd::Matrix &R) {
+Eigen::Vector3f convertRotationMatrixToEulerAngles(const cpd::Matrix &R) {
 	pcl::console::TicToc tt;
 	tt.tic();
 
@@ -147,7 +146,7 @@ float computeHausdorffDistance(pcl::PointCloud<pcl::PointXYZ> &pcA,
 }
 
 void printHelp(int, char **argv) {
-	pcl::console::print_error("Syntax is: %s fixed.pcd moving.pcd outfile.pcd <options>\n",
+	pcl::console::print_error("Syntax is: %s fixed.ply moving.ply outfile.ply <options>\n",
 														argv[0]);
 	pcl::console::print_info("  options:\n");
 	pcl::console::print_info("    -sigma X     = the VoxelGrid leaf size (default: ");
@@ -194,7 +193,6 @@ void downsampleCloud(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &input,
 	pcl::console::print_info(" ms : ");
 	pcl::console::print_value("%d", output.width * output.height);
 	pcl::console::print_info(" points]\n");
-//	std::cout << "width: " << output.width << ", height: " << output.height << std::endl;
 }
 
 bool loadCloud(const std::string &filename,
@@ -203,10 +201,11 @@ bool loadCloud(const std::string &filename,
 	pcl::console::print_highlight("Loading ");
 	pcl::console::print_value("%s ", filename.c_str());
 
+//  pcl::PLYReader reader;
 	tt.tic();
-	if (pcl::io::loadPCDFile(filename, cloud) < 0) {
-	// if (pcl::io::loadPLYFile(filename, cloud) < 0) {
-		return false;
+//  if (reader.read(filename, cloud) < 0) {
+	if (pcl::io::loadPLYFile(filename, cloud) < 0) {
+		return (false);
 	}
 
 	pcl::console::print_info("[done, ");
@@ -214,9 +213,9 @@ bool loadCloud(const std::string &filename,
 	pcl::console::print_info(" ms : ");
 	pcl::console::print_value("%d", cloud.width * cloud.height);
 	pcl::console::print_info(" points]\n");
-//	pcl::console::print_info("Available dimensions: ");
-//	pcl::console::print_value("%s\n", pcl::getFieldsList(cloud).c_str());
-//	std::cout << "width: " << cloud.width << ", height: " << cloud.height << std::endl;
+	pcl::console::print_info("Available dimensions: ");
+	pcl::console::print_value("%s\n", pcl::getFieldsList(cloud).c_str());
+
 	return true;
 }
 
@@ -228,10 +227,7 @@ void saveCloud(const std::string &filename,
 	pcl::console::print_highlight("Saving ");
 	pcl::console::print_value("%s ", filename.c_str());
 
-	// pcl::PCDWriter w;
-	// w.writeBinaryCompressed(filename, cloud);
-	pcl::io::savePCDFileBinaryCompressed(filename, cloud);
-	// pcl::io::savePLYFile(filename, cloud);
+	pcl::io::savePLYFileBinary(filename, cloud);
 
 	pcl::console::print_info("[done, ");
 	pcl::console::print_value("%g", tt.toc());
@@ -241,15 +237,37 @@ void saveCloud(const std::string &filename,
 }
 
 void addCloudViz(pcl::visualization::PCLVisualizer &viewer,
-								 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc, const std::string& name,
-								 const float r, const float g, const float b) {
+								 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pc,
+								 const std::string& name,
+								 const float r,
+								 const float g, const float b) {
 	viewer.addPointCloud<pcl::PointXYZ>(pc, name);
 	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, r, g,
-																					 b,
-																					 name);
+																					b,
+																					name);
 	viewer.setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
-																					 1,
-																					 name);
+																					1,
+																					name);
+}
+
+bool convertMatrixToPointCloud(const Eigen::MatrixXf &matrix,
+															pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
+	try {
+		pcl::PointXYZ point;
+		for (unsigned int i = 0; i < matrix.rows(); i++) {
+			point.x = matrix(i, 0);
+			point.y = matrix(i, 1);
+			point.z = matrix(i, 2);
+			cloud->push_back(point);
+		}
+		cloud->width = (int) cloud->points.size();
+		cloud->height = 1;
+
+		return true;
+	} catch (const std::exception& e) {
+		std::cout << " a standard exception was caught, with message '" << e.what() << "'\n";
+		return false;
+	}
 }
 
 /***
@@ -267,13 +285,7 @@ void visResult(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
 
 	// Display Doppler ROI as a 3D plan cutting through the center peaks of the registered marker
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pcROI(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointXYZ point;
-	for (unsigned int i = 0; i < roi.rows(); i++) {
-		point.x = roi(i, 0);
-		point.y = roi(i, 1);
-		point.z = roi(i, 2);
-		pcROI->push_back(point);
-	}
+	convertMatrixToPointCloud(roi, pcROI);
 	viewer.addPolygon<pcl::PointXYZ>(pcROI, 0.0f, 0.0f, 1.0f, "DopplerROI");
 	viewer.setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, 6,
 																		 "DopplerROI");
@@ -298,9 +310,9 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
-	// Parse the command line arguments for .pcd files
+	// Parse the command line arguments for .ply files
 	std::vector<int> idxFiles;
-	idxFiles = pcl::console::parse_file_extension_argument(argc, argv, ".pcd");
+	idxFiles = pcl::console::parse_file_extension_argument(argc, argv, ".ply");
 	if (idxFiles.size() != 3) {
 		pcl::console::print_error("Need two input files and one output file.\n");
 		return -1;
@@ -434,7 +446,7 @@ int main(int argc, char** argv) {
 
 	// Convert transformation matrix to Euler angles
 	cpd::Matrix mtxTransform = result.matrix();
-	Eigen::Vector3f angles = rotationMatrixToEulerAngles(mtxTransform);
+	Eigen::Vector3f angles = convertRotationMatrixToEulerAngles(mtxTransform);
 	angles = angles * 180 / M_PI;
 
 	pcl::console::print_info("Transformation matrix:\n");
@@ -446,23 +458,8 @@ int main(int argc, char** argv) {
 //	std::cout << result.points.rows() << ", " << result.points.cols() << std::endl;
 	assert(result.points.cols() == 3);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pcRegistered(new pcl::PointCloud<pcl::PointXYZ>);
-	pcl::PointXYZ point;
-	for (unsigned int i = 0; i < result.points.rows(); i++) {
-		point.x = result.points(i, 0);
-		point.y = result.points(i, 1);
-		point.z = result.points(i, 2);
-		pcRegistered->push_back(point);
-	}
-	pcRegistered->width = (int) pcRegistered->points.size();
-	pcRegistered->height = 1;
+	convertMatrixToPointCloud(result.points, pcRegistered);
 	saveCloud(argv[idxFiles[2]], *pcRegistered);
-
-	// Save to txt file although the extension is pcd
-//	std::cout << "Save result to ... [" << argv[idxFiles[2]];
-//	std::ofstream outfile(argv[idxFiles[2]]);
-//	outfile << result.points << std::endl;
-//	outfile.close();
-//	std::cout << "] done" << std::endl;
 
 	// viz initialization and result
 	visResult(pcFixed, pcMoving, pcRegistered, roi);
