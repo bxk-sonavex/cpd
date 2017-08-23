@@ -1,5 +1,6 @@
-#include <cpd/rigid.hpp>
 #include <boost/thread/thread.hpp>
+#include <Eigen/Dense>
+#include <cpd/rigid.hpp>
 #include <pcl/io/ply_io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/search/kdtree.h>
@@ -7,7 +8,6 @@
 #include <pcl/console/parse.h>
 #include <pcl/console/time.h>
 #include <pcl/visualization/pcl_visualizer.h>
-#include <Eigen/Dense>
 
 float default_sigma = 0.0f;
 float default_leaf_size = 0.1f;
@@ -73,25 +73,25 @@ bool isRotationMatrix(const cpd::Matrix &R) {
 /***
  * Calculates rotation matrix to Euler angles
  */
-Eigen::Vector3f convertRotationMatrixToEulerAngles(const cpd::Matrix &R) {
+Eigen::Vector3d convertRotationMatrixToEulerAngles(const cpd::Matrix &R) {
 	pcl::console::TicToc tt;
 	tt.tic();
 
 	assert(isRotationMatrix(R));
 
 	pcl::console::print_highlight(stderr, "Converting to Euler angles ");
-	float sy = sqrt(R(0, 0) * R(0, 0) + R(1, 0) * R(1, 0));
+	double sy = sqrt((double) (R(0, 0) * R(0, 0) + R(1, 0) * R(1, 0)));
 	bool singular = sy < std::numeric_limits<float>::epsilon();
 
-	float x, y, z;
+	double x, y, z;
 	if (!singular) {
-		x = std::atan2(R(2, 1), R(2, 2));
-		y = std::atan2(-R(2, 0), sy);
-		z = std::atan2(R(1, 0), R(0, 0));
+		x = std::atan2((double) R(2, 1), (double)R(2, 2));
+		y = std::atan2((double)-R(2, 0), sy);
+		z = std::atan2((double) R(1, 0), (double)R(0, 0));
 	}
 	else {
-		x = std::atan2(-R(1, 2), R(1, 1));
-		y = std::atan2(-R(2, 0), sy);
+		x = std::atan2((double)-R(1, 2), (double)R(1, 1));
+		y = std::atan2((double)-R(2, 0), sy);
 		z = 0;
 	}
 
@@ -101,7 +101,7 @@ Eigen::Vector3f convertRotationMatrixToEulerAngles(const cpd::Matrix &R) {
 	pcl::console::print_value("%f, %f, %f", x, y, z);
 	pcl::console::print_info(" ]\n");
 
-	return Eigen::Vector3f(x, y, z);
+	return Eigen::Vector3d(x, y, z);
 }
 
 float computeDistanceAB(pcl::PointCloud<pcl::PointXYZ> &pcA,
@@ -389,7 +389,7 @@ int main(int argc, char** argv) {
 			pcl::console::print_value("%f\n", fmax);
 		}
 
-		// Apply the voxel grid downsampling
+		// Downsample using the voxel grid average
 		downsampleCloud(pcFixed, pcFixedDownsampled, leaf_x, leaf_y, leaf_z, field, fmin,
 										fmax);
 	}
@@ -452,7 +452,7 @@ int main(int argc, char** argv) {
 
 	// Convert transformation matrix to Euler angles
 	cpd::Matrix mtxTransform = result.matrix();
-	Eigen::Vector3f angles = convertRotationMatrixToEulerAngles(mtxTransform);
+	Eigen::Vector3d angles = convertRotationMatrixToEulerAngles(mtxTransform);
 	angles = angles * 180 / M_PI;
 
 	pcl::console::print_info("Transformation matrix:\n");
