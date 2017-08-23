@@ -58,7 +58,7 @@ bool isRotationMatrix(const cpd::Matrix &R) {
 //
 //	return pcXYZ;
 //}
-//
+
 //cv::Mat PoinXYZToMat(pcl::PointCloud<pcl::PointXYZ>::ConstPtr &pcXYZ) {
 //	cv::Mat OpenCVPointCloud(3, pcXYZ.size(), CV_64FC1);
 //	for (int i = 0; i < point_cloud_ptr->points.size(); i++) {
@@ -69,6 +69,7 @@ bool isRotationMatrix(const cpd::Matrix &R) {
 //
 //	return OpenCVPointCloud;
 //}
+
 /***
  * Calculates rotation matrix to Euler angles
  */
@@ -201,9 +202,7 @@ bool loadCloud(const std::string &filename,
 	pcl::console::print_highlight("Loading ");
 	pcl::console::print_value("%s ", filename.c_str());
 
-//  pcl::PLYReader reader;
 	tt.tic();
-//  if (reader.read(filename, cloud) < 0) {
 	if (pcl::io::loadPLYFile(filename, cloud) < 0) {
 		return (false);
 	}
@@ -250,7 +249,7 @@ void addCloudViz(pcl::visualization::PCLVisualizer &viewer,
 																					name);
 }
 
-bool convertMatrixToPointCloud(const Eigen::MatrixXf &matrix,
+bool convertMatrixToPointCloud(const cpd::Matrix &matrix,
 															pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
 	try {
 		pcl::PointXYZ point;
@@ -276,7 +275,7 @@ bool convertMatrixToPointCloud(const Eigen::MatrixXf &matrix,
 void visResult(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
 							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcMoving,
 							 pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcRegistered,
-							 const Eigen::MatrixXf &roi) {
+							 const cpd::Matrix &roi) {
 	pcl::visualization::PCLVisualizer viewer("Marker Registration");
 
 	addCloudViz(viewer, pcFixed, "Fixed", 1.0f, 1.0f, 1.0f);
@@ -294,6 +293,13 @@ void visResult(pcl::PointCloud<pcl::PointXYZ>::ConstPtr pcFixed,
 	viewer.addCoordinateSystem(1.0, "first");
 	viewer.setRepresentationToSurfaceForAllActors();
 	viewer.initCameraParameters();
+//	Clipping plane [near,far] 78.3397, 268.894
+//	Focal point [x,y,z] 24.7589, 16.1316, 29.89
+//	Position [x,y,z] -57.9468, -29.629, -102.325
+//	View up [x,y,z] 0.172914, -0.959171, 0.223812
+//	Camera view angle [degrees] 30
+//	Window size [x,y] 918, 771
+//	Window position [x,y] 277, 84
 	while (!viewer.wasStopped()) {
 		viewer.spinOnce(100);
 		boost::this_thread::sleep(boost::posix_time::microseconds(100000));
@@ -404,10 +410,10 @@ int main(int argc, char** argv) {
 
 	// Get Eigen matrix
 	cpd::Matrix ptsMoving = pcMoving->getMatrixXfMap().transpose();
-	assert(ptsMoving.cols() > 3);
+	assert(ptsMoving.cols() >= 3);
 	ptsMoving.conservativeResize(ptsMoving.rows(), 3);
 	cpd::Matrix ptsFixed = pcFixedDownsampled.getMatrixXfMap().transpose();
-	assert(ptsFixed.cols() > 3);
+	assert(ptsFixed.cols() >= 3);
 	ptsFixed.conservativeResize(ptsFixed.rows(), 3);
 
 	// Perform rigid registration
@@ -431,7 +437,7 @@ int main(int argc, char** argv) {
 	float ratio = 2.4 / 4;	// channel
 	float offset = (maxCoeff - minCoeff)(0) * ratio / 2;
 
-	Eigen::MatrixXf roi = Eigen::MatrixXf::Constant(4, 3, motorPosition);
+	cpd::Matrix roi = cpd::Matrix::Constant(4, 3, motorPosition);
 	roi.col(0) << aveCoeff(0) - offset, aveCoeff(0) + offset,
 			aveCoeff(0) + offset, aveCoeff(0) - offset;
 	roi.col(1) << minCoeff(1), minCoeff(1), maxCoeff(1), maxCoeff(1);
